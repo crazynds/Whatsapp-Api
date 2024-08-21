@@ -44,6 +44,17 @@ docker run -it --rm crazynds/whatsapp-api:latest bash
 #### Useful File Locations
 * /app - The aplication folder.
 
+
+## Dev
+
+### Routes
+
+
+* [GET]```/client/:clientId/create?webHook={url}```: Create a client and saves the webHook url. You can recall this route to update the webHook without recreating the client. And if you use the same `clientId` you can recover old sessions.
+* [GET]```/client/:clientId```: Show the current status of this client. This route return a json like: `{clientId:{string}, ready:{bool}, qrCode:{string|null}, webHook: {string|null}}`. The meaning of the ready variable is if the client is connected and able to send or recive any messages.
+* [GET]```/client/:clientId/qrCode```: Route to render the qr code if it exists, or return 404.
+* [POST]```/client/:clientId/send```: Send messages to chats.
+
 ## Built With
 
 * Node.js v22.4.0

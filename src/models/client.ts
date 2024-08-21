@@ -10,6 +10,7 @@ const Client = sequelize.define('client', {
     qrCode: DataTypes.STRING,
     ready: DataTypes.BOOLEAN,
 
+    webHook: DataTypes.STRING
 });
 
 export default Client
