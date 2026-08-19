@@ -18,6 +18,7 @@ import {
   resolveSenderJid,
   ResolvedSender,
   shouldRequestPhoneNumber,
+  queueLidMappingImport,
 } from "./lidMappingService";
 import { isLidUser } from "baileys";
 
@@ -73,12 +74,13 @@ export class WhatsappService {
     const old = false;
     var state: AuthenticationState,
       saveCreds: (newCreds: any) => Promise<void>,
-      removeCreds: (() => Promise<void>) | undefined;
+      removeCreds: (() => Promise<void>) | undefined,
+      dbState: Awaited<ReturnType<typeof useSQLiteAuthState>> | undefined;
     if (old) {
       state = oldState.state;
       saveCreds = oldState.saveCreds;
     } else {
-      var dbState = await await useSQLiteAuthState({
+      dbState = await await useSQLiteAuthState({
         filename: "data/session.db",
         sessionId: this.sessionId,
       });
@@ -101,6 +103,10 @@ export class WhatsappService {
       }
     }
     this.removeCreds = removeCreds ?? null;
+
+    if (dbState?.db) {
+      queueLidMappingImport(dbState.db, this.sessionId);
+    }
 
     const waVersion = await fetchLatestWaConnectVersion();
     const { version: baileysVersion } = await fetchLatestBaileysVersion();
