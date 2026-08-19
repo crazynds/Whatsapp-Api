@@ -2,7 +2,7 @@ import { FindOrCreateOptions } from "@sequelize/core";
 import ClientModel from "../models/client";
 import { clients, deleteClient } from ".";
 import QRCode from "qrcode";
-import { webhookHandler } from "./webhook";
+import { webhookHandler, handleLidMappingUpdate } from "./webhook";
 import log from "../lib/logger";
 import path from "path";
 import { WhatsappService } from "../services/WhatsappService";
@@ -88,7 +88,7 @@ export async function findClient(clientId: any, can_create: boolean = false) {
         await clientModel.save();
       });
       waService.onUpdate(async (messages) => {
-        const a = await webhookHandler(clientModel, [], messages);
+        const a = await webhookHandler(clientModel, waService, [], messages);
         // messages.forEach(async (message) => {
         //   switch (message.update.keepInChat) {
         //   case MessageAck.ACK_ERROR:
@@ -109,9 +109,13 @@ export async function findClient(clientId: any, can_create: boolean = false) {
         // }
         // })
       });
+      waService.onLidMapping(async (mapping) => {
+        await handleLidMappingUpdate(clientModel, mapping);
+      });
       waService.onMessage(async ({ messages }) => {
         const a = await webhookHandler(
           clientModel,
+          waService,
           messages
             .filter((message) => {
               return (

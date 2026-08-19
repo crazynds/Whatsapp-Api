@@ -14,6 +14,12 @@ import logger from "../lib/logger";
 import { ILogger } from "baileys/lib/Utils/logger";
 import fs from "fs";
 import { useSQLiteAuthState } from "./sqlite-state";
+import {
+  resolveSenderJid,
+  ResolvedSender,
+  shouldRequestPhoneNumber,
+} from "./lidMappingService";
+import { isLidUser } from "baileys";
 
 interface ChatInfo {
   id: string;
@@ -217,6 +223,9 @@ export class WhatsappService {
     this.sock.ev.on("messages.update", (m) => {
       if ("update" in this.callbacks) this.callbacks["update"](m);
     });
+    this.sock.ev.on("lid-mapping.update", (mapping) => {
+      if ("lidMapping" in this.callbacks) this.callbacks["lidMapping"](mapping);
+    });
   }
 
   public on(event: keyof BaileysEventMap, callback: any) {
@@ -246,9 +255,24 @@ export class WhatsappService {
   ) {
     this.callbacks["message"] = callback;
   }
+  public onLidMapping(
+    callback: (arg: BaileysEventMap["lid-mapping.update"]) => void,
+  ) {
+    this.callbacks["lidMapping"] = callback;
+  }
 
   /**
-   * Envia uma mensagem para um número
+   * Resolve um jid de remetente (telefone ou lid) para o telefone real,
+   * usando o mapeamento global e o lidMapping nativo do Baileys.
+   */
+  public async resolveSenderJid(jid: string): Promise<ResolvedSender> {
+    if (!this.sock) throw new Error("Socket não inicializado");
+    return resolveSenderJid(this.sock, jid);
+  }
+
+  /**
+   * Envia uma mensagem para um número (ou lid, quando o telefone real ainda
+   * não é conhecido pelo backend).
    */
   public async sendMessage(
     to: string,
@@ -271,6 +295,20 @@ export class WhatsappService {
     const content = this.buildMessageContent(message, mediaPath, mimetype, isVoice);
     await this.sock.sendMessage(jid, content);
     this.sock.sendPresenceUpdate("unavailable");
+  }
+
+  /**
+   * Pede (via prompt nativo do WhatsApp) que o dono do lid compartilhe seu
+   * telefone real. Chamado ao receber uma mensagem cujo remetente ainda não
+   * foi resolvido — a resposta chega depois pelo evento `lid-mapping.update`.
+   * Respeita um cooldown para não repetir o pedido a cada mensagem.
+   */
+  public async requestPhoneNumber(lid: string): Promise<void> {
+    if (!this.sock) throw new Error("Socket não inicializado");
+    if (!isLidUser(lid)) return;
+    if (!shouldRequestPhoneNumber(lid)) return;
+    logger.info(`Solicitando telefone real para lid ${lid}`);
+    await this.sock.sendMessage(lid, { requestPhoneNumber: true });
   }
 
   /**

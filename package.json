@@ -17,7 +17,7 @@
   "license": "MIT",
   "dependencies": {
     "@sequelize/sqlite3": "^7.0.0-alpha.41",
-    "baileys": "^7.0.0-rc13",
+    "baileys": "^7.0.0-rc14",
     "better-sqlite3": "^12.5.0",
     "express": "^4.19",
     "multer": "^2.0.2",

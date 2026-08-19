@@ -72,6 +72,8 @@ When a webhook URL is configured, the server will send HTTP POST requests with t
             "messages": [
               {
                 "from": $senderPhoneNumber,
+                "lid": $senderLid,
+                "pushName": $senderDisplayName,
                 "id": $messageId,
                 "timestamp": $timestamp,
                 "type": "text",
@@ -119,6 +121,61 @@ When a webhook URL is configured, the server will send HTTP POST requests with t
   ]
 }
 ```
+
+#### LID (unknown phone number)
+
+WhatsApp sometimes hides a contact's real phone number, addressing them only by
+a **LID** (an internal, opaque WhatsApp id — not a phone number) instead of a
+regular JID. This typically happens with contacts that have phone-number
+privacy enabled, and is very common for `click-to-WhatsApp` ads (Instagram/
+Facebook ads that open a WhatsApp chat), where the number may never be exposed
+unless the user explicitly shares it.
+
+When this happens, the server does **not** invent a fake phone number. Instead:
+
+- Any message from that contact is still sent to the webhook normally, but
+  `from` comes empty (`""`) and a `lid` field is set instead (see the
+  `messages` payload above) — the same applies to each entry in `contacts`
+  (`wa_id: ""`, `lid: $contactLid`).
+- The server automatically nudges WhatsApp's native "share phone number"
+  prompt to that contact (equivalent to sending a message with
+  `{ "requestPhoneNumber": true }`), throttled to at most once every 6h per
+  lid, so you don't need to do anything to trigger it.
+- If/when the contact accepts and the real phone number becomes known, the
+  server sends a **dedicated** webhook event, `field: "lid_resolved"`, so your
+  backend can swap its internal references from the lid to the real phone and
+  move on:
+
+```json
+{
+  "object": "whatsapp_web_account",
+  "entry": [
+    {
+      "id": $clientId,
+      "changes": [
+        {
+          "value": {
+            "phone_number_id": $clientId,
+            "lid": $contactLid,
+            "phone": $resolvedPhoneNumber
+          },
+          "field": "lid_resolved"
+        }
+      ]
+    }
+  ]
+}
+```
+
+There is no message queue/retry involved on the server's side — a lid that
+never resolves simply keeps sending messages marked with `lid` (and `from`
+empty) indefinitely; it's up to the consumer to decide how to handle that
+(e.g. not creating a "phone number" record until it's resolved).
+
+**Sending a message to a lid-only contact:** if you don't have a phone number
+for a contact yet, send to `{lid}@lid` as the `chatId` (e.g.
+`POST /api/message/chat/131451903279212@lid?clientId=...`) instead of a bare
+phone number — the server accepts an explicit domain suffix on the chat id.
 
 #### Whatsapp Web Disconnected
 

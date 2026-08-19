@@ -9,10 +9,23 @@ export interface WhatsAppEntry {
   changes: WhatsAppChange[];
 }
 
-export interface WhatsAppChange {
-  field: "messages" | "message_template_status_update" | "message_status";
-  value: WhatsAppChangeValue;
-}
+export type WhatsAppChange =
+  | {
+      field: "messages" | "message_template_status_update" | "message_status";
+      value: WhatsAppChangeValue;
+    }
+  | {
+      // Emitido quando o telefone real de um contato antes só endereçável
+      // por lid é resolvido (ex: aceitou compartilhar o número após um
+      // pedido `requestPhoneNumber`). O backend deve trocar as referências
+      // ao `lid` pelo `phone` real e seguir o fluxo normalmente.
+      field: "lid_resolved";
+      value: {
+        phone_number_id: string; // clientId do whatshttp
+        lid: string; // dígitos do lid, sem sufixo @lid
+        phone: string; // telefone real, dígitos, sem +
+      };
+    };
 
 export interface WhatsAppChangeValue {
   messaging_product: "whatsapp";
@@ -30,12 +43,20 @@ export interface WhatsAppContact {
   profile?: {
     name?: string;
   };
-  wa_id: string; // número do contato
+  wa_id: string; // número do contato; "" quando ainda não resolvido (ver `lid`)
+  lid?: string; // presente quando o contato só é conhecido por lid
 }
 
 /** Representa uma mensagem recebida ou enviada */
 export interface WhatsAppMessage {
-  from: string; // número do remetente
+  from: string; // número do remetente; "" quando ainda não resolvido (ver `lid`)
+  // Presente quando o remetente só é conhecido por lid (dígitos, sem
+  // sufixo @lid) — o backend NÃO deve tratar isso como telefone.
+  lid?: string;
+  // Nome que o contato definiu no próprio perfil do WhatsApp. Quase sempre
+  // disponível já na primeira mensagem — não precisa de resolução posterior
+  // como o telefone via lid.
+  pushName?: string;
   id: string; // ID único da mensagem (wamid)
   timestamp: string;
   type: WhatsAppMessageType;
